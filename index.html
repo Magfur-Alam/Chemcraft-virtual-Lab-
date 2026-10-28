@@ -1,0 +1,146 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChemCraft Lab</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#0b1020;color:#f1f5f9}
+header{padding:22px;background:#151d33;border-bottom:1px solid #293653}
+h1{margin:0;color:#5eead4}
+header p{color:#aab8d0}
+nav{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+nav a{color:#e2e8f0;text-decoration:none;padding:9px 12px;background:#25304a;border-radius:8px}
+main{max-width:1000px;margin:auto;padding:22px}
+.card{background:#151d33;border:1px solid #293653;border-radius:14px;padding:20px;margin:16px 0}
+input,button{padding:12px;border-radius:8px;font-size:15px}
+input{background:#0b1020;color:white;border:1px solid #43516d;width:100%;margin:8px 0}
+button{background:#5eead4;color:#06201e;border:0;font-weight:bold;cursor:pointer}
+.result{white-space:pre-wrap;overflow-wrap:anywhere;color:#cbd5e1}
+small{color:#aab8d0}
+</style>
+</head>
+<body>
+<header>
+<h1>⚗️ ChemCraft Lab</h1>
+<p>Your virtual chemistry learning laboratory</p>
+<nav>
+<a href="#home">Home</a>
+<a href="#search">Compound Search</a>
+<a href="#viewer">Molecule Viewer</a>
+<a href="#compare">Compare</a>
+<a href="#theory">Theory</a>
+</nav>
+</header>
+
+<main>
+<section id="home" class="card">
+<h2>Welcome to ChemCraft Lab</h2>
+<p>Explore chemical compounds, molecular structures and properties.</p>
+<p>Search a compound to begin your virtual lab experience.</p>
+</section>
+
+<section id="search" class="card">
+<h2>🔎 Compound Search</h2>
+<input id="query" placeholder="Enter compound name, e.g. water">
+<button onclick="searchCompound()">Search Compound</button>
+<div id="result" class="result"></div>
+</section>
+
+<section id="viewer" class="card">
+<h2>🧬 3D Molecule Viewer</h2>
+<p>Search for a compound first, then load its 3D structure here.</p>
+<div id="mol" style="height:320px;background:#fff;border-radius:10px"></div>
+</section>
+
+<section id="compare" class="card">
+<h2>⚖️ Compare Compounds</h2>
+<input id="compound1" placeholder="First compound, e.g. water">
+<input id="compound2" placeholder="Second compound, e.g. ethanol">
+<button onclick="compareCompounds()">Compare</button>
+<div id="comparison" class="result"></div>
+</section>
+
+<section id="theory" class="card">
+<h2>📚 Chemistry Theory</h2>
+<h3>Molecules</h3>
+<p>A molecule is made of two or more atoms chemically bonded together.</p>
+<h3>Molecular formula</h3>
+<p>A molecular formula shows the types and numbers of atoms in a molecule.</p>
+<h3>Molecular weight</h3>
+<p>Molecular weight is calculated from the atomic masses of the atoms in a molecule.</p>
+</section>
+
+<footer class="card">
+<small>ChemCraft Lab | Educational chemistry project</small>
+</footer>
+</main>
+
+<script>
+async function getCompound(name){
+ const url="https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/"+encodeURIComponent(name)+"/property/MolecularFormula,MolecularWeight,IUPACName,CanonicalSMILES/JSON";
+ const response=await fetch(url);
+ if(!response.ok) throw new Error("Compound not found. Check the spelling.");
+ const data=await response.json();
+ return data.PropertyTable.Properties[0];
+}
+
+async function searchCompound(){
+ const name=document.getElementById("query").value.trim();
+ const out=document.getElementById("result");
+ if(!name){out.textContent="Please enter a compound name.";return;}
+ out.textContent="Searching online chemical database...";
+ try{
+  const c=await getCompound(name);
+  out.textContent="Compound ID: "+c.CID+
+   "\nFormula: "+c.MolecularFormula+
+   "\nMolecular Weight: "+c.MolecularWeight+
+   "\nIUPAC Name: "+c.IUPACName+
+   "\nSMILES: "+c.CanonicalSMILES;
+  loadMolecule(c.CID);
+ }catch(e){out.textContent=e.message+" Make sure your internet connection is working.";}
+}
+
+async function loadMolecule(cid){
+ const viewer=document.getElementById("mol");
+ viewer.innerHTML="<p style='color:#333;padding:15px'>Loading 3D structure...</p>";
+ try{
+  const r=await fetch("https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/"+cid+"/record/SDF?record_type=3d");
+  if(!r.ok)throw new Error();
+  const sdf=await r.text();
+  const script=document.createElement("script");
+  script.src="https://3Dmol.org/build/3Dmol-min.js";
+  script.onload=()=>{
+   viewer.innerHTML="";
+   const v=$3Dmol.createViewer(viewer,{backgroundColor:"white"});
+   v.addModel(sdf,"sdf");
+   v.setStyle({},{stick:{},sphere:{scale:0.3}});
+   v.zoomTo();
+   v.render();
+  };
+  script.onerror=()=>viewer.innerHTML="<p style='color:#333;padding:15px'>3D viewer could not load.</p>";
+  document.head.appendChild(script);
+ }catch(e){
+  viewer.innerHTML="<p style='color:#333;padding:15px'>3D structure is not available for this compound.</p>";
+ }
+}
+
+async function compareCompounds(){
+ const a=document.getElementById("compound1").value.trim();
+ const b=document.getElementById("compound2").value.trim();
+ const out=document.getElementById("comparison");
+ if(!a||!b){out.textContent="Enter both compound names.";return;}
+ out.textContent="Comparing compounds...";
+ try{
+  const [x,y]=await Promise.all([getCompound(a),getCompound(b)]);
+  out.textContent=
+   a+": "+x.MolecularFormula+" | "+x.MolecularWeight+" g/mol"+
+   "\n"+b+": "+y.MolecularFormula+" | "+y.MolecularWeight+" g/mol";
+ }catch(e){out.textContent="Could not find one or both compounds. Check their names.";}
+}
+</script>
+</body>
+  </html>
+  
